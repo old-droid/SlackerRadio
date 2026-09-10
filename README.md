@@ -15,7 +15,8 @@ SlackerRadio/
 ├── LICENSE                # Project license information
 └── broadcasts/            # Broadcast recordings and documentation
     └── broadcasts.md      # Detailed broadcast information
-``
+```
+
 ## To get started
 
 See [broadcasts/broadcasts.md](broadcasts/broadcasts.md) for broadcast details.
