@@ -1,6 +1,9 @@
 name: Broadcast Management
 
 on:
+  # Allow manual workflow dispatch
+  workflow_dispatch:
+  
   # Trigger on push events when audio files are uploaded to broadcasts folder
   push:
     paths:
