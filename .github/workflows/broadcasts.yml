@@ -1,0 +1,146 @@
+name: Broadcast Management
+
+on:
+  # Trigger on push events when audio files are uploaded to broadcasts folder
+  push:
+    paths:
+      - 'broadcasts/**/*'
+    branches:
+      - main
+      - master
+  
+  # Schedule cleanup daily
+  schedule:
+    - cron: '0 0 * * *'  # Runs daily at midnight UTC
+
+jobs:
+  update-broadcasts:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Find new audio files
+        id: find-files
+        run: |
+          # Find recently added audio files (mp3, wav, m4a, etc.)
+          echo "Finding audio files added in the last commit..."
+          git diff --name-only HEAD~1 HEAD | grep -E '\.(mp3|wav|m4a|ogg|flac)$' > new_files.txt || echo "No new audio files found"
+          
+          if [ -s new_files.txt ]; then
+            echo "files_found=true" >> $GITHUB_OUTPUT
+            echo "file_list=$(cat new_files.txt)" >> $GITHUB_OUTPUT
+          else
+            echo "files_found=false" >> $GITHUB_OUTPUT
+          fi
+      
+      - name: Update broadcasts.md
+        if: steps.find-files.outputs.files_found == 'true'
+        run: |
+          # Get current date
+          DATE=$(date +"%Y-%m-%d")
+          
+          # Read the file list
+          FILES=$(echo "${{ steps.find-files.outputs.file_list }}")
+          
+          # Add new entries to broadcasts.md
+          echo "## Broadcast - $DATE" >> broadcasts/broadcasts.md
+          echo "" >> broadcasts/broadcasts.md
+          echo "### Audio Recordings" >> broadcasts/broadcasts.md
+          echo "" >> broadcasts/broadcasts.md
+          
+          for file in $FILES; do
+            # Create markdown link for the audio file
+            filename=$(basename "$file")
+            echo "- [$filename]($file)" >> broadcasts/broadcasts.md
+          done
+          
+          echo "" >> broadcasts/broadcasts.md
+          echo "---" >> broadcasts/broadcasts.md
+          echo "" >> broadcasts/broadcasts.md
+      
+      - name: Commit changes
+        if: steps.find-files.outputs.files_found == 'true'
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add broadcasts/broadcasts.md
+          git commit -m "Update broadcasts.md with new audio recordings"
+          git push
+
+  cleanup-old-broadcasts:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule'
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+      
+      - name: Find and delete old audio files
+        run: |
+          # Find audio files older than 30 days
+          echo "Finding audio files older than 30 days..."
+          find broadcasts/ -type f \( -name "*.mp3" -o -name "*.wav" -o -name "*.m4a" -o -name "*.ogg" -o -name "*.flac" \) -mtime +30 -print > old_files.txt || echo "No old files found"
+          
+          if [ -s old_files.txt ]; then
+            echo "Found old files to delete:"
+            cat old_files.txt
+            
+            # Delete old files
+            while read file; do
+              echo "Deleting: $file"
+              rm "$file"
+            done < old_files.txt
+            
+            # Update broadcasts.md to remove references to deleted files
+            python3 << 'EOF'
+            import re
+            from datetime import datetime, timedelta
+
+            # Read broadcasts.md
+            with open('broadcasts/broadcasts.md', 'r') as f:
+                content = f.read()
+            
+            # Remove entries older than 30 days
+            lines = content.split('\n')
+            new_lines = []
+            current_date = None
+            keep_section = True
+            
+            for line in lines:
+                # Check for date headers
+                date_match = re.match(r'## Broadcast - (\d{4}-\d{2}-\d{2})', line)
+                if date_match:
+                    try:
+                        entry_date = datetime.strptime(date_match.group(1), '%Y-%m-%d')
+                        if entry_date < datetime.now() - timedelta(days=30):
+                            keep_section = False
+                        else:
+                            keep_section = True
+                    except:
+                        keep_section = True
+                
+                if keep_section:
+                    new_lines.append(line)
+            
+            # Write back
+            with open('broadcasts/broadcasts.md', 'w') as f:
+                f.write('\n'.join(new_lines))
+            
+            print("Updated broadcasts.md to remove old entries")
+            EOF
+          else
+            echo "No files to delete"
+          fi
+      
+      - name: Commit cleanup changes
+        run: |
+          if git diff --quiet; then
+            echo "No changes to commit"
+          else
+            git config --local user.email "github-actions[bot]@users.noreply.github.com"
+            git config --local user.name "github-actions[bot]"
+            git add -A
+            git commit -m "Cleanup: Remove broadcasts older than 30 days"
+            git push
+          fi
