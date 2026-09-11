@@ -1,6 +1,6 @@
 # SlackerRadio
 
-https://www.canva.com/design/DAHU40WrWvc/dYml5yASlSophRh2lzVyqA/view
+<a href="https://ibb.co/BHYhmYzC"><img src="https://i.ibb.co/SDZk2Zs3/RADIOO.png" alt="RADIOO" border="0"></a>
 
 Unofficial Hackclub's radio station over slacker news.
 
